@@ -1,0 +1,9 @@
+[package]
+name = "ships"
+version = "0.1.0"
+edition = "2021"
+
+# Ships Game
+
+[dependencies]
+bevy = { version = "0.8.1", features = ["dynamic"] }
