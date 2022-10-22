@@ -26,6 +26,11 @@ struct Ship {
     color: String,
 }
 
+#[derive(Component)]
+struct Laser {
+    color: String,
+}
+
 // Entity: a collection of components with a unique id
 //     Examples: Entity1 { Name("Alice"), Position(0, 0) },
 
@@ -54,13 +59,31 @@ fn main() {
         .add_system(keyboard_input_system)
         .add_system(toggle_override)
         .add_system(change_scale_factor)
+        .add_system(laser_system)
         .run();
+}
+
+fn laser_system(mut lasers: Query<(&mut Laser, &mut Transform)>) {
+
+    let laser_velocity = 7.0;
+    for (laser, mut transform) in &mut lasers {
+
+        if laser.color == "yellow" {
+            transform.translation.x += laser_velocity; 
+        }
+
+        if laser.color == "red" {
+            transform.translation.x -= laser_velocity; 
+        }
+    }
 }
 
 fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut ships: Query<(&mut Ship, &mut Transform)>,
     windows: ResMut<Windows>,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
 ) {
     /*info!("ships: {}", ships.iter().collect::<Vec<&Ship>>().len());
     for ship in ships.iter() {
@@ -68,10 +91,10 @@ fn keyboard_input_system(
     }*/
 
     let velocity = 5.0;
-    
+
     let window = windows.primary();
-    let width = window.width(); 
-    let height = window.height();  
+    let width = window.width();
+    let height = window.height();
     //info!("window w: {}, h: {}", width, height);
 
     for (ship, mut transform) in &mut ships {
@@ -104,35 +127,66 @@ fn keyboard_input_system(
             {
                 transform.translation.x -= velocity;
             }
+
+            // backspace
+            if keyboard_input.pressed(KeyCode::Back) {
+                let x = transform.translation.x + ship_width;
+                let y = transform.translation.y;
+                commands
+                    .spawn()
+                    .insert_bundle(SpriteBundle {
+                        texture: asset_server.load("yellow_laser.png"),
+                        transform: Transform {
+                            translation: Vec3 { x, y, z: 1.0 },
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .insert(Laser { color: "yellow".to_string() });
+            }
         }
+
         if ship.color == "red" {
             // up
             if keyboard_input.pressed(KeyCode::I)
                 && transform.translation.y + velocity + ship_height / 2.0 < height / 2.0
             {
                 transform.translation.y += velocity;
-                info!("x: {}, y: {}", transform.translation.x, transform.translation.y);
             }
             // down
             if keyboard_input.pressed(KeyCode::K)
                 && transform.translation.y - velocity - ship_height / 2.0 > -height / 2.0
             {
                 transform.translation.y -= velocity;
-                info!("x: {}, y: {}", transform.translation.x, transform.translation.y);
             }
             // right
             if keyboard_input.pressed(KeyCode::L)
                 && transform.translation.x + velocity + ship_width / 2.0 < width / 2.0
             {
                 transform.translation.x += velocity;
-                info!("x: {}, y: {}", transform.translation.x, transform.translation.y);
             }
             // left
             if keyboard_input.pressed(KeyCode::J)
                 && transform.translation.x - velocity - (ship_width / 2.0) > 0.0
             {
                 transform.translation.x -= velocity;
-                info!("x: {}, y: {}", transform.translation.x, transform.translation.y);
+            }
+
+            // space
+            if keyboard_input.pressed(KeyCode::Space) {
+                let x = transform.translation.x - ship_width;
+                let y = transform.translation.y;
+                commands
+                    .spawn()
+                    .insert_bundle(SpriteBundle {
+                        texture: asset_server.load("red_laser.png"),
+                        transform: Transform {
+                            translation: Vec3 { x, y, z: 1.0 },
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .insert(Laser { color: "red".to_string() });
             }
         }
     }
