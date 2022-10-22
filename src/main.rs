@@ -18,8 +18,6 @@ pub struct Materials {
 struct Ship {
     color: String,
     health: u8,
-    laser_count: u8,
-    max_lasers: u8,
 }
 
 #[derive(Reflect, Component, Default)]
@@ -92,82 +90,66 @@ fn laser_system(
     }
 }
 
-fn player_fire(
+
+fn fire_laser(
+    color: &str,
+    lasers: Query<(&Transform, &mut Laser)>,
+    ships: Query<(&Transform, &Ship)>,
     mut commands: Commands,
-    kb: Res<Input<KeyCode>>,
-    mut query: Query<(&Transform, &mut Laser)>,
-    mut ships: Query<(&Transform, &Ship)>,
     asset_server: Res<AssetServer>,
 ) {
     let ship_width = 500.0 * 0.1;
-    //let ship_height = 413.0 * 0.1;
-
-    //info!( "lasers: {}", query.iter().map(|(_t, l)| l).collect::<Vec<&Laser>>().len());
     let max_lasers = 3;
 
-    // space
-    if kb.pressed(KeyCode::Space) {
-        let transform_laser =
-            query
-                .iter()
-                .filter_map(|(t, l)| if l.color == "red" { Some((t, l)) } else { None });
-        let laser_count = transform_laser.collect::<Vec<(&Transform, &Laser)>>().len();
-        if laser_count < max_lasers {
-            let mut idk = ships
-                .iter()
-                .filter(|(_t, l)| if l.color == "red" { true } else { false })
-                .into_iter();
-            if let Some((ship_transform, _ship)) = idk.next() {
-                let x = ship_transform.translation.x - ship_width;
-                let y = ship_transform.translation.y;
-                commands
-                    .spawn()
-                    .insert_bundle(SpriteBundle {
-                        texture: asset_server.load("red_laser.png"),
-                        transform: Transform {
-                            translation: Vec3 { x, y, z: 1.0 },
-                            ..default()
-                        },
-                        ..default()
-                    })
-                    .insert(Laser {
-                        color: "red".to_string(),
-                    });
+    let transform_laser =
+        lasers
+            .iter()
+            .filter_map(|(t, l)| if l.color == color { Some((t, l)) } else { None });
+    let laser_count = transform_laser.collect::<Vec<(&Transform, &Laser)>>().len();
+    if laser_count < max_lasers {
+        let mut idk = ships
+            .iter()
+            .filter(|(_t, l)| if l.color == color { true } else { false })
+            .into_iter();
+        if let Some((ship_transform, _ship)) = idk.next() {
+
+            let x = if color == "red" {
+                ship_transform.translation.x - ship_width
             } else {
-                info!("where is the red ship?");
-            }
+                ship_transform.translation.x + ship_width
+            };
+            let y = ship_transform.translation.y;
+            let laser_asset_name = color.to_owned() + "_laser.png";
+            commands
+                .spawn()
+                .insert_bundle(SpriteBundle {
+                    texture: asset_server.load(&laser_asset_name),
+                    transform: Transform {
+                        translation: Vec3 { x, y, z: 1.0 },
+                        ..default()
+                    },
+                    ..default()
+                })
+                .insert(Laser {
+                    color: color.to_string(),
+                });
+        } else {
+            info!("where is the red ship?");
         }
     }
-    // backspace
-    if kb.pressed(KeyCode::Back) {
-        let transform_laser =
-            query
-                .iter()
-                .filter_map(|(t, l)| if l.color == "yellow" { Some((t, l)) } else { None });
-        let laser_count = transform_laser.collect::<Vec<(&Transform, &Laser)>>().len();
-        if laser_count < max_lasers {
-            let mut idk = ships
-                .iter()
-                .filter(|(_t, l)| if l.color == "yellow" { true } else { false })
-                .into_iter();
-            if let Some((ship_transform, _ship)) = idk.next() {
-                let x = ship_transform.translation.x + ship_width;
-                let y = ship_transform.translation.y;
-                commands
-                    .spawn()
-                    .insert_bundle(SpriteBundle {
-                        texture: asset_server.load("yellow_laser.png"),
-                        transform: Transform {
-                            translation: Vec3 { x, y, z: 1.0 },
-                            ..default()
-                        },
-                        ..default()
-                    })
-                    .insert(Laser {
-                        color: "yellow".to_string(),
-                    });
-            }
-        }
+}
+
+fn player_fire(
+    commands: Commands,
+    kb: Res<Input<KeyCode>>,
+    query: Query<(&Transform, &mut Laser)>,
+    ships: Query<(&Transform, &Ship)>,
+    asset_server: Res<AssetServer>,
+) {
+    if kb.pressed(KeyCode::Space) {
+        fire_laser("red", query, ships, commands, asset_server);
+    } else if kb.pressed(KeyCode::Back) {
+        fire_laser("yellow", query, ships, commands, asset_server);
     }
 }
 
@@ -175,14 +157,7 @@ fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut ships: Query<(&mut Ship, &mut Transform)>,
     windows: ResMut<Windows>,
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
 ) {
-    /*info!("ships: {}", ships.iter().collect::<Vec<&Ship>>().len());
-    for ship in ships.iter() {
-        info!(ship.color);
-    }*/
-
     let velocity = 5.0;
 
     let window = windows.primary();
@@ -190,7 +165,7 @@ fn keyboard_input_system(
     let height = window.height();
     //info!("window w: {}, h: {}", width, height);
 
-    for (mut ship, mut transform) in &mut ships {
+    for (ship, mut transform) in &mut ships {
         // original image 500 × 413
         let ship_width = 500.0 * transform.scale.x;
         let ship_height = 413.0 * transform.scale.y;
@@ -220,29 +195,6 @@ fn keyboard_input_system(
             {
                 transform.translation.x -= velocity;
             }
-
-            // backspace
-         /*   if keyboard_input.pressed(KeyCode::Back) {
-                if ship.laser_count < ship.max_lasers {
-                    let x = transform.translation.x + ship_width;
-                    let y = transform.translation.y;
-                    commands
-                        .spawn()
-                        .insert_bundle(SpriteBundle {
-                            texture: asset_server.load("yellow_laser.png"),
-                            transform: Transform {
-                                translation: Vec3 { x, y, z: 1.0 },
-                                ..default()
-                            },
-                            ..default()
-                        })
-                        .insert(Laser {
-                            color: "yellow".to_string(),
-                        });
-                    ship.laser_count += 1;
-                }
-            }
-            */
         }
 
         if ship.color == "red" {
@@ -270,28 +222,6 @@ fn keyboard_input_system(
             {
                 transform.translation.x -= velocity;
             }
-
-            /*if keyboard_input.pressed(KeyCode::Space) {
-                if ship.laser_count < ship.max_lasers {
-                    let x = transform.translation.x - ship_width;
-                    let y = transform.translation.y;
-                    commands
-                        .spawn()
-                        .insert_bundle(SpriteBundle {
-                            texture: asset_server.load("red_laser.png"),
-                            transform: Transform {
-                                translation: Vec3 { x, y, z: 1.0 },
-                                ..default()
-                            },
-                            ..default()
-                        })
-                        .insert(Laser {
-                            color: "red".to_string(),
-                        });
-                    ship.laser_count += 1;
-                }
-            }
-            */
         }
     }
 }
@@ -323,8 +253,6 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let ship_component = Ship {
         color: "red".to_string(),
         health: 10,
-        laser_count: 0,
-        max_lasers: 3,
     };
 
     commands
@@ -353,8 +281,6 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let ship_component = Ship {
         color: "yellow".to_string(),
         health: 10,
-        laser_count: 0,
-        max_lasers: 3,
     };
 
     commands
