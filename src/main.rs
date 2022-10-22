@@ -19,6 +19,7 @@ struct Ship {
     color: String,
     health: u8,
     laser_timer: Timer,
+    fire_time_passed: bool,
 }
 
 #[derive(Reflect, Component, Default)]
@@ -61,6 +62,7 @@ fn main() {
         .add_system(change_scale_factor)
         .add_system(laser_system)
         .add_system(player_fire)
+        .add_system(check_laser_time)
         .run();
 }
 
@@ -92,80 +94,62 @@ fn laser_system(
     }
 }
 
-
-fn fire_laser(
-    color: &str,
-    lasers: Query<(&Transform, &mut Laser)>,
-    ships: Query<(&Transform, &mut Ship)>,
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
+fn check_laser_time(
+    mut ships: Query<(&Transform, &mut Ship)>,
+    time: Res<Time>,
 ) {
-    let ship_width = 500.0 * 0.1;
-
-    let transform_laser =
-        lasers
-            .iter()
-            .filter_map(|(t, l)| if l.color == color { Some((t, l)) } else { None });
-    let laser_count = transform_laser.collect::<Vec<(&Transform, &Laser)>>().len();
-    if laser_count < MAX_LASERS {
-        let mut idk = ships
-            .iter()
-            .filter(|(_t, l)| if l.color == color { true } else { false })
-            .into_iter();
-        if let Some((ship_transform, _ship)) = idk.next() {
-
-            let x = if color == "red" {
-                ship_transform.translation.x - ship_width
-            } else {
-                ship_transform.translation.x + ship_width
-            };
-            let y = ship_transform.translation.y;
-            let laser_asset_name = color.to_owned() + "_laser.png";
-            commands
-                .spawn()
-                .insert_bundle(SpriteBundle {
-                    texture: asset_server.load(&laser_asset_name),
-                    transform: Transform {
-                        translation: Vec3 { x, y, z: 1.0 },
-                        ..default()
-                    },
-                    ..default()
-                })
-                .insert(Laser {
-                    color: color.to_string(),
-                });
-        } else {
-            info!("where is the red ship?");
+    for (_t, mut ship) in &mut ships {
+        ship.laser_timer.tick(time.delta());
+        if ship.laser_timer.just_finished() {
+            ship.fire_time_passed = true;
         }
     }
 }
 
 fn player_fire(
-    commands: Commands,
+    mut commands: Commands,
     kb: Res<Input<KeyCode>>,
-    query: Query<(&Transform, &mut Laser)>,
+    lasers: Query<(&Transform, &mut Laser)>,
     mut ships: Query<(&Transform, &mut Ship)>,
     asset_server: Res<AssetServer>,
-    time: Res<Time>,
 ) {
-    let mut red_can_fire = false;
-    let mut yellow_can_fire = false;
-    for (_t, mut ship) in &mut ships {
-        ship.laser_timer.tick(time.delta());
-        if ship.laser_timer.just_finished() {
-            if ship.color == "red" {
-                red_can_fire = true;
-            }
-            if ship.color == "yellow" {
-                yellow_can_fire = true;
+    let ship_width = 500.0 * 0.1;
+
+    for (ship_transform, mut ship) in &mut ships {
+        let color = ship.color.to_owned();
+        if (color == "red" && kb.pressed(KeyCode::Space)) || (color == "yellow" && kb.pressed(KeyCode::Back)) {
+
+            let transform_laser =
+                lasers
+                    .iter()
+                    .filter_map(|(t, l)| if l.color == ship.color { Some((t, l)) } else { None });
+            let laser_count = transform_laser.collect::<Vec<(&Transform, &Laser)>>().len();
+            if laser_count < MAX_LASERS {
+                if ship.fire_time_passed {
+                    let x = if color == "red" {
+                        ship_transform.translation.x - ship_width
+                    } else {
+                        ship_transform.translation.x + ship_width
+                    };
+                    let y = ship_transform.translation.y;
+                    let laser_asset_name = color.to_owned() + "_laser.png";
+                    commands
+                        .spawn()
+                        .insert_bundle(SpriteBundle {
+                            texture: asset_server.load(&laser_asset_name),
+                            transform: Transform {
+                                translation: Vec3 { x, y, z: 1.0 },
+                                ..default()
+                            },
+                            ..default()
+                        })
+                        .insert(Laser {
+                            color,
+                        });
+                    ship.fire_time_passed = false;
+                }
             }
         }
-    }
-
-    if kb.pressed(KeyCode::Space) && red_can_fire {
-        fire_laser("red", query, ships, commands, asset_server);
-    } else if kb.pressed(KeyCode::Back) && yellow_can_fire {
-        fire_laser("yellow", query, ships, commands, asset_server);
     }
 }
 
@@ -269,7 +253,8 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let ship_component = Ship {
         color: "red".to_string(),
         health: 10,
-        laser_timer: Timer::from_seconds(0.1, true),
+        laser_timer: Timer::from_seconds(0.2, true),
+        fire_time_passed: true,
     };
 
     commands
@@ -298,7 +283,8 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let ship_component = Ship {
         color: "yellow".to_string(),
         health: 10,
-        laser_timer: Timer::from_seconds(0.1, true),
+        laser_timer: Timer::from_seconds(0.2, true),
+        fire_time_passed: true,
     };
 
     commands
