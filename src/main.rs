@@ -18,6 +18,7 @@ pub struct Materials {
 struct Ship {
     color: String,
     health: u8,
+    laser_timer: Timer,
 }
 
 #[derive(Reflect, Component, Default)]
@@ -34,6 +35,7 @@ struct Laser {
 
 pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 pub const RESOLUTION: f32 = 16.0 / 9.0;
+pub const MAX_LASERS: usize = 5;
 
 fn main() {
     let width = 900.0;
@@ -94,19 +96,18 @@ fn laser_system(
 fn fire_laser(
     color: &str,
     lasers: Query<(&Transform, &mut Laser)>,
-    ships: Query<(&Transform, &Ship)>,
+    ships: Query<(&Transform, &mut Ship)>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
 ) {
     let ship_width = 500.0 * 0.1;
-    let max_lasers = 3;
 
     let transform_laser =
         lasers
             .iter()
             .filter_map(|(t, l)| if l.color == color { Some((t, l)) } else { None });
     let laser_count = transform_laser.collect::<Vec<(&Transform, &Laser)>>().len();
-    if laser_count < max_lasers {
+    if laser_count < MAX_LASERS {
         let mut idk = ships
             .iter()
             .filter(|(_t, l)| if l.color == color { true } else { false })
@@ -143,12 +144,27 @@ fn player_fire(
     commands: Commands,
     kb: Res<Input<KeyCode>>,
     query: Query<(&Transform, &mut Laser)>,
-    ships: Query<(&Transform, &Ship)>,
+    mut ships: Query<(&Transform, &mut Ship)>,
     asset_server: Res<AssetServer>,
+    time: Res<Time>,
 ) {
-    if kb.pressed(KeyCode::Space) {
+    let mut red_can_fire = false;
+    let mut yellow_can_fire = false;
+    for (_t, mut ship) in &mut ships {
+        ship.laser_timer.tick(time.delta());
+        if ship.laser_timer.just_finished() {
+            if ship.color == "red" {
+                red_can_fire = true;
+            }
+            if ship.color == "yellow" {
+                yellow_can_fire = true;
+            }
+        }
+    }
+
+    if kb.pressed(KeyCode::Space) && red_can_fire {
         fire_laser("red", query, ships, commands, asset_server);
-    } else if kb.pressed(KeyCode::Back) {
+    } else if kb.pressed(KeyCode::Back) && yellow_can_fire {
         fire_laser("yellow", query, ships, commands, asset_server);
     }
 }
@@ -253,6 +269,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let ship_component = Ship {
         color: "red".to_string(),
         health: 10,
+        laser_timer: Timer::from_seconds(0.1, true),
     };
 
     commands
@@ -281,6 +298,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let ship_component = Ship {
         color: "yellow".to_string(),
         health: 10,
+        laser_timer: Timer::from_seconds(0.1, true),
     };
 
     commands
