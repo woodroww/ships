@@ -1,32 +1,29 @@
 use bevy::prelude::*;
-
-pub struct SpaceShipPlugin;
-
-impl Plugin for SpaceShipPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_startup_system(add_ships);
-    }
-}
-
-fn add_ships(mut commands: Commands) {
-    commands.spawn().insert(ShipHealth { hp: 5 });
-}
+use bevy_inspector_egui::WorldInspectorPlugin;
 
 // Components are the data associated with entities.
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
 //     Examples: position, velocity, health, color, name
 
-#[derive(Component)]
-struct ShipHealth {
-    hp: u8,
+/*
+pub struct Materials {
+    player: Handle<ColorMaterial>,
+    laser: Handle<ColorMaterial>,
 }
+    */
 
-#[derive(Component)]
+// reflect things for bevy_inspector_egui
+#[derive(Reflect, Component, Default)]
+#[reflect(Component)]
 struct Ship {
     color: String,
+    health: u8,
+    laser_count: u8,
+    max_lasers: u8,
 }
 
-#[derive(Component)]
+#[derive(Reflect, Component, Default)]
+#[reflect(Component)]
 struct Laser {
     color: String,
 }
@@ -45,6 +42,7 @@ fn main() {
     let height = 500.0;
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(ClearColor(CLEAR))
         .insert_resource(WindowDescriptor {
             width,
@@ -54,29 +52,106 @@ fn main() {
             resizable: false,
             ..Default::default()
         })
+        .register_type::<Ship>()
+        .register_type::<Laser>()
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_player)
         .add_system(keyboard_input_system)
         .add_system(toggle_override)
         .add_system(change_scale_factor)
         .add_system(laser_system)
+ //       .add_system(player_fire)
         .run();
 }
 
-fn laser_system(mut lasers: Query<(&mut Laser, &mut Transform)>) {
+fn laser_system(
+    windows: ResMut<Windows>,
+    mut commands: Commands,
+    mut lasers: Query<(Entity, &mut Laser, &mut Transform)>,
+) {
+    //info!("lasers: {}", lasers.iter().map(|(laser, _, _)| laser).collect::<Vec<&Laser>>().len());
 
+    let window = windows.primary();
+    let width = window.width();
     let laser_velocity = 7.0;
-    for (laser, mut transform) in &mut lasers {
 
+    for (entity, laser, mut transform) in &mut lasers {
         if laser.color == "yellow" {
-            transform.translation.x += laser_velocity; 
+            transform.translation.x += laser_velocity;
+            if transform.translation.x > width / 2.0 {
+                // despawn
+                commands.entity(entity).despawn_recursive();
+            }
         }
 
         if laser.color == "red" {
-            transform.translation.x -= laser_velocity; 
+            transform.translation.x -= laser_velocity;
+            if transform.translation.x < -width / 2.0 {
+                // despawn
+                commands.entity(entity).despawn_recursive();
+            }
         }
     }
 }
+
+/*
+fn player_fire(
+    mut commands: Commands,
+    kb: Res<Input<KeyCode>>,
+    mut query: Query<(&Transform, &mut Laser)>,
+    asset_server: Res<AssetServer>,
+) {
+    let ship_width = 500.0 * 0.1;
+    //let ship_height = 413.0 * 0.1;
+
+    info!("lasers: {}", query.iter().map(|(_t, l)| l).collect::<Vec<&Laser>>().len());
+
+    for (laser_transform, mut laser) in query.iter_mut() {
+        // space
+        if laser.color == "red" && kb.pressed(KeyCode::Space) {
+            if laser.laser_count < laser.max_lasers {
+                let x = laser_transform.translation.x - ship_width;
+                let y = laser_transform.translation.y;
+                laser.laser_count += 1;
+                commands
+                    .spawn()
+                    .insert_bundle(SpriteBundle {
+                        texture: asset_server.load("red_laser.png"),
+                        transform: Transform {
+                            translation: Vec3 { x, y, z: 1.0 },
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .insert(Laser {
+                        color: "red".to_string(),
+                    });
+            }
+        }
+
+        // backspace
+        if laser.color == "yellow" && kb.pressed(KeyCode::Back) {
+            if kb.pressed(KeyCode::Back) {
+                let x = laser_transform.translation.x + ship_width;
+                let y = laser_transform.translation.y;
+                commands
+                    .spawn()
+                    .insert_bundle(SpriteBundle {
+                        texture: asset_server.load("yellow_laser.png"),
+                        transform: Transform {
+                            translation: Vec3 { x, y, z: 1.0 },
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .insert(Laser {
+                        color: "yellow".to_string(),
+                    });
+            }
+        }
+    }
+}
+*/
 
 fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,
@@ -172,7 +247,6 @@ fn keyboard_input_system(
                 transform.translation.x -= velocity;
             }
 
-            // space
             if keyboard_input.pressed(KeyCode::Space) {
                 let x = transform.translation.x - ship_width;
                 let y = transform.translation.y;
@@ -218,6 +292,9 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let ship_component = Ship {
         color: "red".to_string(),
+        health: 10,
+        laser_count: 0,
+        max_lasers: 3,
     };
 
     commands
@@ -227,7 +304,9 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             transform: red_transform,
             ..default()
         })
-        .insert(ship_component);
+        .insert(ship_component)
+        .insert(Name::new("red ship"))
+        ;
 
     let yellow_transform = Transform {
         rotation: Quat::from_rotation_z(90.0 * core::f32::consts::PI / 180.0),
@@ -244,6 +323,9 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     };
     let ship_component = Ship {
         color: "yellow".to_string(),
+        health: 10,
+        laser_count: 0,
+        max_lasers: 3,
     };
 
     commands
@@ -253,7 +335,9 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
             transform: yellow_transform,
             ..default()
         })
-        .insert(ship_component);
+        .insert(ship_component)
+        .insert(Name::new("yellow ship"))
+        ;
 }
 
 fn spawn_camera(mut commands: Commands) {
