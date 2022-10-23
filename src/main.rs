@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy::sprite::collide_aabb::collide;
 
 // Components are the data associated with entities.
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
@@ -19,14 +20,14 @@ struct Ship {
     color: String,
     health: u8,
     laser_timer: Timer,
-    fire_time_passed: bool,
+    fire_delay_passed: bool,
 }
 
-#[derive(Reflect, Component, Default)]
-#[reflect(Component)]
-struct Laser {
-    color: String,
-}
+#[derive(Component)]
+struct YellowLaser;
+
+#[derive(Component)]
+struct RedLaser;
 
 // Entity: a collection of components with a unique id
 //     Examples: Entity1 { Name("Alice"), Position(0, 0) },
@@ -37,6 +38,10 @@ struct Laser {
 pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 pub const RESOLUTION: f32 = 16.0 / 9.0;
 pub const MAX_LASERS: usize = 5;
+pub const LASER_SIZE: Vec2 = Vec2 { x: 55.0, y: 17.0 };
+pub const SHIP_SCALE: f32 = 0.1;
+// original image 500 × 413
+pub const SHIP_SIZE: Vec2 = Vec2 { x: 500.0 * SHIP_SCALE, y: 413.0 * SHIP_SCALE };
 
 fn main() {
     let width = 900.0;
@@ -54,54 +59,99 @@ fn main() {
             ..Default::default()
         })
         .register_type::<Ship>()
-        .register_type::<Laser>()
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_player)
         .add_system(keyboard_input_system)
-        .add_system(toggle_override)
-        .add_system(change_scale_factor)
         .add_system(laser_system)
         .add_system(player_fire)
         .add_system(check_laser_time)
+        .add_system(check_for_collisions)
+        .add_system(chack_for_game_over)
         .run();
 }
 
-fn laser_system(
-    windows: ResMut<Windows>,
-    mut commands: Commands,
-    mut lasers: Query<(Entity, &mut Laser, &mut Transform)>,
+fn chack_for_game_over(
+    mut ships: Query<&mut Ship>,
 ) {
-    //info!("lasers: {}", lasers.iter().map(|(laser, _, _)| laser).collect::<Vec<&Laser>>().len());
-
-    let window = windows.primary();
-    let width = window.width();
-    let laser_velocity = 7.0;
-
-    for (entity, laser, mut transform) in &mut lasers {
-        if laser.color == "yellow" {
-            transform.translation.x += laser_velocity;
-            if transform.translation.x > width / 2.0 {
-                commands.entity(entity).despawn_recursive();
-            }
+    for ship in &mut ships {
+        if ship.health == 0 {
+            info!("game over");
         }
+    }
+}
 
-        if laser.color == "red" {
-            transform.translation.x -= laser_velocity;
-            if transform.translation.x < -width / 2.0 {
-                commands.entity(entity).despawn_recursive();
+fn check_for_collisions(
+    mut commands: Commands,
+    yellow_lasers: Query<(Entity, &Transform, &YellowLaser)>,
+    red_lasers: Query<(Entity, &Transform, &RedLaser)>,
+    mut ships: Query<(&Transform, &mut Ship)>,
+) {
+    for (ship_transform, mut ship) in &mut ships {
+        if ship.color == "red" {
+            for (entity, laser_transform, _laser) in &yellow_lasers {
+                let collision = collide(
+                    laser_transform.translation,
+                    LASER_SIZE,
+                    ship_transform.translation,
+                    SHIP_SIZE,
+                );
+                if let Some(_collision) = collision {
+                    info!("collision!");
+                    ship.health -= 1;
+                    commands.entity(entity).despawn_recursive();
+                }
+            }
+        } else {
+            for (entity, laser_transform, _laser) in &red_lasers {
+                let collision = collide(
+                    laser_transform.translation,
+                    LASER_SIZE,
+                    ship_transform.translation,
+                    SHIP_SIZE,
+                );
+                if let Some(_collision) = collision {
+                    info!("collision!");
+                    ship.health -= 1;
+                    commands.entity(entity).despawn_recursive();
+                }
             }
         }
     }
 }
 
-fn check_laser_time(
-    mut ships: Query<(&Transform, &mut Ship)>,
+fn laser_system(
+    windows: ResMut<Windows>,
+    mut commands: Commands,
+    mut red_lasers: Query<(Entity, &RedLaser, &mut Transform), Without<YellowLaser>>,
+    mut yellow_lasers: Query<(Entity, &YellowLaser, &mut Transform), Without<RedLaser>>,
     time: Res<Time>,
 ) {
+    //info!("lasers: {}", lasers.iter().map(|(laser, _, _)| laser).collect::<Vec<&Laser>>().len());
+
+    let window = windows.primary();
+    let width = window.width();
+    let laser_velocity = 600.0 * time.delta_seconds();
+
+    for (entity, _laser, mut transform) in &mut yellow_lasers {
+        transform.translation.x += laser_velocity;
+        if transform.translation.x > width / 2.0 {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+
+    for (entity, _laser, mut transform) in &mut red_lasers {
+        transform.translation.x -= laser_velocity;
+        if transform.translation.x < -width / 2.0 {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
+fn check_laser_time(mut ships: Query<(&Transform, &mut Ship)>, time: Res<Time>) {
     for (_t, mut ship) in &mut ships {
         ship.laser_timer.tick(time.delta());
         if ship.laser_timer.just_finished() {
-            ship.fire_time_passed = true;
+            ship.fire_delay_passed = true;
         }
     }
 }
@@ -109,7 +159,8 @@ fn check_laser_time(
 fn player_fire(
     mut commands: Commands,
     kb: Res<Input<KeyCode>>,
-    lasers: Query<(&Transform, &mut Laser)>,
+    red_lasers: Query<(&Transform, &RedLaser)>,
+    yellow_lasers: Query<(&Transform, &YellowLaser)>,
     mut ships: Query<(&Transform, &mut Ship)>,
     asset_server: Res<AssetServer>,
 ) {
@@ -117,15 +168,17 @@ fn player_fire(
 
     for (ship_transform, mut ship) in &mut ships {
         let color = ship.color.to_owned();
-        if (color == "red" && kb.pressed(KeyCode::Space)) || (color == "yellow" && kb.pressed(KeyCode::Back)) {
+        if (color == "red" && kb.pressed(KeyCode::Space))
+            || (color == "yellow" && kb.pressed(KeyCode::Back))
+        {
+            let laser_count = if color == "red" {
+                red_lasers.iter().len()
+            } else {
+                yellow_lasers.iter().len()
+            };
 
-            let transform_laser =
-                lasers
-                    .iter()
-                    .filter_map(|(t, l)| if l.color == ship.color { Some((t, l)) } else { None });
-            let laser_count = transform_laser.collect::<Vec<(&Transform, &Laser)>>().len();
             if laser_count < MAX_LASERS {
-                if ship.fire_time_passed {
+                if ship.fire_delay_passed {
                     let x = if color == "red" {
                         ship_transform.translation.x - ship_width
                     } else {
@@ -133,20 +186,32 @@ fn player_fire(
                     };
                     let y = ship_transform.translation.y;
                     let laser_asset_name = color.to_owned() + "_laser.png";
-                    commands
-                        .spawn()
-                        .insert_bundle(SpriteBundle {
-                            texture: asset_server.load(&laser_asset_name),
-                            transform: Transform {
-                                translation: Vec3 { x, y, z: 1.0 },
+                    if color == "red" {
+                        commands
+                            .spawn()
+                            .insert_bundle(SpriteBundle {
+                                texture: asset_server.load(&laser_asset_name),
+                                transform: Transform {
+                                    translation: Vec3 { x, y, z: 1.0 },
+                                    ..default()
+                                },
                                 ..default()
-                            },
-                            ..default()
-                        })
-                        .insert(Laser {
-                            color,
-                        });
-                    ship.fire_time_passed = false;
+                            })
+                            .insert(RedLaser {});
+                    } else {
+                        commands
+                            .spawn()
+                            .insert_bundle(SpriteBundle {
+                                texture: asset_server.load(&laser_asset_name),
+                                transform: Transform {
+                                    translation: Vec3 { x, y, z: 1.0 },
+                                    ..default()
+                                },
+                                ..default()
+                            })
+                            .insert(YellowLaser {});
+                    }
+                    ship.fire_delay_passed = false;
                 }
             }
         }
@@ -157,8 +222,9 @@ fn keyboard_input_system(
     keyboard_input: Res<Input<KeyCode>>,
     mut ships: Query<(&mut Ship, &mut Transform)>,
     windows: ResMut<Windows>,
+    time: Res<Time>,
 ) {
-    let velocity = 5.0;
+    let velocity = 200.0 * time.delta_seconds();
 
     let window = windows.primary();
     let width = window.width();
@@ -239,8 +305,8 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let red_transform = Transform {
         rotation: Quat::from_rotation_z(-90.0 * core::f32::consts::PI / 180.0),
         scale: Vec3 {
-            x: 0.1,
-            y: 0.1,
+            x: SHIP_SCALE,
+            y: SHIP_SCALE,
             z: 1.0,
         },
         translation: Vec3 {
@@ -254,7 +320,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
         color: "red".to_string(),
         health: 10,
         laser_timer: Timer::from_seconds(0.2, true),
-        fire_time_passed: true,
+        fire_delay_passed: true,
     };
 
     commands
@@ -270,8 +336,8 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     let yellow_transform = Transform {
         rotation: Quat::from_rotation_z(90.0 * core::f32::consts::PI / 180.0),
         scale: Vec3 {
-            x: 0.1,
-            y: 0.1,
+            x: SHIP_SCALE,
+            y: SHIP_SCALE,
             z: 1.0,
         },
         translation: Vec3 {
@@ -284,7 +350,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
         color: "yellow".to_string(),
         health: 10,
         laser_timer: Timer::from_seconds(0.2, true),
-        fire_time_passed: true,
+        fire_delay_passed: true,
     };
 
     commands
@@ -302,20 +368,3 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn().insert_bundle(Camera2dBundle::default());
 }
 
-/// This system toggles scale factor overrides when enter is pressed
-fn toggle_override(input: Res<Input<KeyCode>>, mut windows: ResMut<Windows>) {
-    let window = windows.primary_mut();
-    if input.just_pressed(KeyCode::Return) {
-        window.set_scale_factor_override(window.scale_factor_override().xor(Some(1.)));
-    }
-}
-
-/// This system changes the scale factor override when up or down is pressed
-fn change_scale_factor(input: Res<Input<KeyCode>>, mut windows: ResMut<Windows>) {
-    let window = windows.primary_mut();
-    if input.just_pressed(KeyCode::Up) {
-        window.set_scale_factor_override(window.scale_factor_override().map(|n| n + 1.));
-    } else if input.just_pressed(KeyCode::Down) {
-        window.set_scale_factor_override(window.scale_factor_override().map(|n| (n - 1.).max(1.)));
-    }
-}
