@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy::sprite::collide_aabb::collide;
+use bevy_inspector_egui::WorldInspectorPlugin;
 
 // Components are the data associated with entities.
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
@@ -13,6 +13,20 @@ pub struct Materials {
 }
     */
 
+struct GameOverEvent {
+    winner: String,
+}
+
+enum GameState {
+    GameOver,
+    Playing,
+    //   Reset,
+}
+
+struct ShipGame {
+    state: GameState,
+}
+
 // reflect things for bevy_inspector_egui
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
@@ -22,6 +36,19 @@ struct Ship {
     laser_timer: Timer,
     fire_delay_passed: bool,
 }
+
+#[derive(Component)]
+struct ScoreBoard;
+
+#[derive(Component)]
+struct ScoreEvent {
+    loser: String,
+}
+
+#[derive(Component)]
+struct RedText;
+#[derive(Component)]
+struct YellowText;
 
 #[derive(Component)]
 struct YellowLaser;
@@ -41,7 +68,10 @@ pub const MAX_LASERS: usize = 5;
 pub const LASER_SIZE: Vec2 = Vec2 { x: 55.0, y: 17.0 };
 pub const SHIP_SCALE: f32 = 0.1;
 // original image 500 × 413
-pub const SHIP_SIZE: Vec2 = Vec2 { x: 500.0 * SHIP_SCALE, y: 413.0 * SHIP_SCALE };
+pub const SHIP_SIZE: Vec2 = Vec2 {
+    x: 500.0 * SHIP_SCALE,
+    y: 413.0 * SHIP_SCALE,
+};
 
 fn main() {
     let width = 900.0;
@@ -49,6 +79,9 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(WorldInspectorPlugin::new())
+        .insert_resource(ShipGame {
+            state: GameState::Playing,
+        })
         .insert_resource(ClearColor(CLEAR))
         .insert_resource(WindowDescriptor {
             width,
@@ -59,36 +92,41 @@ fn main() {
             ..Default::default()
         })
         .register_type::<Ship>()
+        //       .register_inspectable::<ShipGame>()
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_player)
+        .add_startup_system(spawn_scoreboard)
         .add_system(keyboard_input_system)
         .add_system(laser_system)
         .add_system(player_fire)
         .add_system(check_laser_time)
         .add_system(check_for_collisions)
-        .add_system(chack_for_game_over)
+        .add_system(reset_player)
+        .add_system(game_over)
+        .add_system(score_board)
+        .add_event::<GameOverEvent>()
+        .add_event::<ScoreEvent>()
         .run();
 }
 
-fn chack_for_game_over(
-    mut ships: Query<&mut Ship>,
-) {
-    for ship in &mut ships {
-        if ship.health == 0 {
-            info!("game over");
-        }
+fn game_over(mut game_over_events: EventReader<GameOverEvent>) {
+    for event in game_over_events.iter() {
+        info!("Game Over! {} wins!", event.winner);
     }
 }
+
 
 fn check_for_collisions(
     mut commands: Commands,
     yellow_lasers: Query<(Entity, &Transform, &YellowLaser)>,
     red_lasers: Query<(Entity, &Transform, &RedLaser)>,
     mut ships: Query<(&Transform, &mut Ship)>,
+    mut game_over_event: EventWriter<GameOverEvent>,
+    mut score_event: EventWriter<ScoreEvent>,
 ) {
     for (ship_transform, mut ship) in &mut ships {
         if ship.color == "red" {
-            for (entity, laser_transform, _laser) in &yellow_lasers {
+            for (laser_entity, laser_transform, _laser) in &yellow_lasers {
                 let collision = collide(
                     laser_transform.translation,
                     LASER_SIZE,
@@ -96,13 +134,19 @@ fn check_for_collisions(
                     SHIP_SIZE,
                 );
                 if let Some(_collision) = collision {
-                    info!("collision!");
                     ship.health -= 1;
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(laser_entity).despawn_recursive();
+                    score_event.send(ScoreEvent { loser: "red".to_string() });
                 }
             }
+            if ship.health == 0 {
+                game_over_event.send(GameOverEvent {
+                    winner: "yellow".to_string(),
+                });
+                break;
+            }
         } else {
-            for (entity, laser_transform, _laser) in &red_lasers {
+            for (laser_entity, laser_transform, _laser) in &red_lasers {
                 let collision = collide(
                     laser_transform.translation,
                     LASER_SIZE,
@@ -110,10 +154,16 @@ fn check_for_collisions(
                     SHIP_SIZE,
                 );
                 if let Some(_collision) = collision {
-                    info!("collision!");
                     ship.health -= 1;
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(laser_entity).despawn_recursive();
+                    score_event.send(ScoreEvent { loser: "yellow".to_string() });
                 }
+            }
+            if ship.health == 0 {
+                game_over_event.send(GameOverEvent {
+                    winner: "red".to_string(),
+                });
+                break;
             }
         }
     }
@@ -163,7 +213,11 @@ fn player_fire(
     yellow_lasers: Query<(&Transform, &YellowLaser)>,
     mut ships: Query<(&Transform, &mut Ship)>,
     asset_server: Res<AssetServer>,
+    game: Res<ShipGame>,
 ) {
+    if let GameState::GameOver = game.state {
+        return;
+    }
     let ship_width = 500.0 * 0.1;
 
     for (ship_transform, mut ship) in &mut ships {
@@ -292,6 +346,35 @@ fn keyboard_input_system(
     }
 }
 
+fn reset_player(
+    mut ships: Query<(&mut Transform, &mut Ship)>,
+    mut game_over: EventReader<GameOverEvent>,
+    mut score_event: EventWriter<ScoreEvent>,
+) {
+    let event = game_over.iter().nth(0);
+    if event.is_some() {
+        for (mut ship_transform, mut ship) in &mut ships {
+            if ship.color == "red" {
+                ship_transform.translation = Vec3 {
+                    x: 250.0,
+                    y: 0.0,
+                    z: 1.0,
+                };
+            } else {
+                ship_transform.translation = Vec3 {
+                    x: -250.0,
+                    y: 0.0,
+                    z: 1.0,
+                };
+            }
+            ship.health = 10;
+        }
+        // this "red" shouldn't matter as we are not actually updating the health
+        // we just want the score board updated
+        score_event.send(ScoreEvent { loser: "red".to_string() });
+    }
+}
+
 fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     // let spaceship_size = (55, 40);
     // original image 500 × 413
@@ -368,3 +451,80 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn().insert_bundle(Camera2dBundle::default());
 }
 
+fn spawn_scoreboard(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    windows: ResMut<Windows>,
+) {
+    let font = asset_server.load("fonts/SFNSMono.ttf");
+    let text_style = TextStyle {
+        font,
+        font_size: 90.0,
+        color: Color::WHITE,
+    };
+    let text_alignment = TextAlignment::CENTER;
+
+    let window = windows.primary();
+    let width = window.width();
+    let height = window.height();
+    let x_padding = 100.0;
+    let y_padding = x_padding * (height / width);
+    let y_location = height / 2.0 - y_padding; 
+
+    let left_score = Transform {
+        translation: Vec3 { x: -width / 2.0 + x_padding, y: y_location, z: 1.0 },
+        ..default()
+    };
+
+    commands
+        .spawn_bundle(Text2dBundle {
+            text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
+            transform: left_score,
+            ..default()
+        })
+        .insert(ScoreBoard)
+        .insert(YellowText);
+
+    let right_score = Transform {
+        translation: Vec3 { x: width / 2.0 - x_padding, y: y_location, z: 1.0 },
+        ..default()
+    };
+
+    commands
+        .spawn_bundle(Text2dBundle {
+            text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
+            transform: right_score,
+            ..default()
+        })
+        .insert(ScoreBoard)
+        .insert(RedText);
+}
+
+fn score_board(
+    ships: Query<&Ship>,
+    mut score_events: EventReader<ScoreEvent>,
+    mut red_text: Query<&mut Text, (With<RedText>, Without<YellowText>)>,
+    mut yellow_text: Query<&mut Text, (With<YellowText>, Without<RedText>)>,
+    asset_server: Res<AssetServer>,
+) {
+    let font = asset_server.load("fonts/SFNSMono.ttf");
+    let text_style = TextStyle {
+        font,
+        font_size: 90.0,
+        color: Color::WHITE,
+    };
+    let text_alignment = TextAlignment::CENTER;
+    for event in score_events.iter() {
+        for ship in ships.iter() {
+            if event.loser == "red" && ship.color == "red" {
+                if let Ok(mut text) = red_text.get_single_mut() {
+                    *text = Text::from_section(ship.health.to_string(), text_style.clone()).with_alignment(text_alignment);
+                }
+            } else {
+                if let Ok(mut text) = yellow_text.get_single_mut() {
+                    *text = Text::from_section(ship.health.to_string(), text_style.clone()).with_alignment(text_alignment);
+                }
+            }
+        }
+    }
+}
