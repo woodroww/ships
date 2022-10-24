@@ -96,8 +96,7 @@ fn main() {
             ..Default::default()
         })
         .register_type::<Ship>()
-        //       .register_inspectable::<ShipGame>()
-        .add_startup_system(load_resources)
+        .add_startup_system_to_stage(StartupStage::PreStartup, load_resources)
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_player)
         .add_startup_system(spawn_scoreboard)
@@ -396,7 +395,10 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 }
 
-fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn spawn_player(
+    mut commands: Commands,
+    materials: Res<Materials>,
+) {
     // let spaceship_size = (55, 40);
     // original image 500 × 413
 
@@ -430,7 +432,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn()
         .insert_bundle(SpriteBundle {
-            texture: asset_server.load("spaceship_red.png"),
+            texture: materials.red_space_ship.clone(),
             transform: red_transform,
             ..default()
         })
@@ -460,7 +462,7 @@ fn spawn_player(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn()
         .insert_bundle(SpriteBundle {
-            texture: asset_server.load("spaceship_yellow.png"),
+            texture: materials.yellow_space_ship.clone(),
             transform: yellow_transform,
             ..default()
         })
