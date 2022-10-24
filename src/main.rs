@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::sprite::collide_aabb::collide;
 use bevy_inspector_egui::WorldInspectorPlugin;
+use bevy_kira_audio::prelude::*;
 
 // Components are the data associated with entities.
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
@@ -14,6 +15,8 @@ pub struct Materials {
     font: Handle<Font>,
     font_size: f32,
     color: Color,
+    fire_sound: Handle<AudioSource>,
+    hit_sound: Handle<AudioSource>,
 }
 
 struct GameOverEvent {
@@ -82,6 +85,7 @@ fn main() {
     let height = 500.0;
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(AudioPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(ShipGame {
             state: GameState::Playing,
@@ -126,6 +130,8 @@ fn check_for_collisions(
     mut ships: Query<(&Transform, &mut Ship)>,
     mut game_over_event: EventWriter<GameOverEvent>,
     mut score_event: EventWriter<ScoreEvent>,
+    audio: Res<Audio>,
+    materials: Res<Materials>,
 ) {
     for (ship_transform, mut ship) in &mut ships {
         if ship.color == "red" {
@@ -142,6 +148,7 @@ fn check_for_collisions(
                     score_event.send(ScoreEvent {
                         loser: "red".to_string(),
                     });
+                    audio.play(materials.hit_sound.clone());
                 }
             }
             if ship.health == 0 {
@@ -164,6 +171,7 @@ fn check_for_collisions(
                     score_event.send(ScoreEvent {
                         loser: "yellow".to_string(),
                     });
+                    audio.play(materials.hit_sound.clone());
                 }
             }
             if ship.health == 0 {
@@ -221,12 +229,12 @@ fn player_fire(
     mut ships: Query<(&Transform, &mut Ship)>,
     game: Res<ShipGame>,
     materials: Res<Materials>,
+    audio: Res<Audio>,
 ) {
     if let GameState::GameOver = game.state {
         return;
     }
     let ship_width = 500.0 * 0.1;
-
     for (ship_transform, mut ship) in &mut ships {
         let color = ship.color.to_owned();
         if (color == "red" && keyboard.pressed(KeyCode::Space))
@@ -271,6 +279,7 @@ fn player_fire(
                             })
                             .insert(YellowLaser {});
                     }
+                    audio.play(materials.fire_sound.clone());
                     ship.fire_delay_passed = false;
                 }
             }
@@ -384,6 +393,9 @@ fn reset_player(
 }
 
 fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let fire_sound = asset_server.load("Gun+Silencer.mp3");
+    let hit_sound = asset_server.load("Grenade+1.mp3"); 
+
     commands.insert_resource(Materials {
         red_laser: asset_server.load("red_laser.png"),
         red_space_ship: asset_server.load("spaceship_red.png"),
@@ -392,6 +404,8 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
         font: asset_server.load("fonts/SFNSMono.ttf"),
         font_size: 90.0,
         color: Color::WHITE,
+        fire_sound,
+        hit_sound, 
     });
 }
 
