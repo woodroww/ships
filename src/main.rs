@@ -7,6 +7,7 @@ use bevy_kira_audio::prelude::*;
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
 //     Examples: position, velocity, health, color, name
 
+#[derive(Resource)]
 pub struct Materials {
     red_laser: Handle<Image>,
     red_space_ship: Handle<Image>,
@@ -29,6 +30,7 @@ enum GameState {
     //   Reset,
 }
 
+#[derive(Resource)]
 struct ShipGame {
     state: GameState,
 }
@@ -79,26 +81,25 @@ pub const SHIP_SIZE: Vec2 = Vec2 {
     y: 413.0 * SHIP_SCALE,
 };
 
-
 fn main() {
     let width = 900.0;
     let height = 500.0;
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            window: WindowDescriptor {
+                title: "Bevy Tower Defense".to_string(),
+                width,
+                height,
+                ..default()
+            },
+            ..default()
+        }))
         .add_plugin(AudioPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(ShipGame {
             state: GameState::Playing,
         })
         .insert_resource(ClearColor(CLEAR))
-        .insert_resource(WindowDescriptor {
-            width,
-            height,
-            title: "Bevy Tutorial".to_string(),
-            present_mode: bevy::window::PresentMode::AutoVsync,
-            resizable: false,
-            ..Default::default()
-        })
         .register_type::<Ship>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_resources)
         .add_startup_system(spawn_camera)
@@ -255,29 +256,29 @@ fn player_fire(
                     };
                     let y = ship_transform.translation.y;
                     if color == "red" {
-                        commands
-                            .spawn()
-                            .insert_bundle(SpriteBundle {
+                        commands.spawn((
+                            SpriteBundle {
                                 texture: materials.red_laser.clone(),
                                 transform: Transform {
                                     translation: Vec3 { x, y, z: 1.0 },
                                     ..default()
                                 },
                                 ..default()
-                            })
-                            .insert(RedLaser {});
+                            },
+                            RedLaser {},
+                        ));
                     } else {
-                        commands
-                            .spawn()
-                            .insert_bundle(SpriteBundle {
+                        commands.spawn((
+                            SpriteBundle {
                                 texture: materials.yellow_laser.clone(),
                                 transform: Transform {
                                     translation: Vec3 { x, y, z: 1.0 },
                                     ..default()
                                 },
                                 ..default()
-                            })
-                            .insert(YellowLaser {});
+                            },
+                            YellowLaser {},
+                        ));
                     }
                     audio.play(materials.fire_sound.clone());
                     ship.fire_delay_passed = false;
@@ -394,7 +395,7 @@ fn reset_player(
 
 fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
     let fire_sound = asset_server.load("Gun+Silencer.mp3");
-    let hit_sound = asset_server.load("Grenade+1.mp3"); 
+    let hit_sound = asset_server.load("Grenade+1.mp3");
 
     commands.insert_resource(Materials {
         red_laser: asset_server.load("red_laser.png"),
@@ -405,14 +406,11 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
         font_size: 90.0,
         color: Color::WHITE,
         fire_sound,
-        hit_sound, 
+        hit_sound,
     });
 }
 
-fn spawn_player(
-    mut commands: Commands,
-    materials: Res<Materials>,
-) {
+fn spawn_player(mut commands: Commands, materials: Res<Materials>) {
     // let spaceship_size = (55, 40);
     // original image 500 × 413
 
@@ -439,19 +437,19 @@ fn spawn_player(
     let ship_component = Ship {
         color: "red".to_string(),
         health: 10,
-        laser_timer: Timer::from_seconds(0.2, true),
+        laser_timer: Timer::from_seconds(0.2, TimerMode::Repeating),
         fire_delay_passed: true,
     };
 
-    commands
-        .spawn()
-        .insert_bundle(SpriteBundle {
+    commands.spawn((
+        SpriteBundle {
             texture: materials.red_space_ship.clone(),
             transform: red_transform,
             ..default()
-        })
-        .insert(ship_component)
-        .insert(Name::new("red ship"));
+        },
+        ship_component,
+        Name::new("red ship"),
+    ));
 
     let yellow_transform = Transform {
         rotation: Quat::from_rotation_z(90.0 * core::f32::consts::PI / 180.0),
@@ -469,23 +467,23 @@ fn spawn_player(
     let ship_component = Ship {
         color: "yellow".to_string(),
         health: 10,
-        laser_timer: Timer::from_seconds(0.2, true),
+        laser_timer: Timer::from_seconds(0.2, TimerMode::Repeating),
         fire_delay_passed: true,
     };
 
-    commands
-        .spawn()
-        .insert_bundle(SpriteBundle {
+    commands.spawn((
+        SpriteBundle {
             texture: materials.yellow_space_ship.clone(),
             transform: yellow_transform,
             ..default()
-        })
-        .insert(ship_component)
-        .insert(Name::new("yellow ship"));
+        },
+        ship_component,
+        Name::new("yellow ship"),
+    ));
 }
 
 fn spawn_camera(mut commands: Commands) {
-    commands.spawn().insert_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 }
 
 fn spawn_scoreboard(
@@ -517,14 +515,15 @@ fn spawn_scoreboard(
         ..default()
     };
 
-    commands
-        .spawn_bundle(Text2dBundle {
+    commands.spawn((
+        Text2dBundle {
             text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
             transform: left_score,
             ..default()
-        })
-        .insert(ScoreBoard)
-        .insert(YellowText);
+        },
+        ScoreBoard,
+        YellowText,
+    ));
 
     let right_score = Transform {
         translation: Vec3 {
@@ -535,14 +534,15 @@ fn spawn_scoreboard(
         ..default()
     };
 
-    commands
-        .spawn_bundle(Text2dBundle {
+    commands.spawn((
+        Text2dBundle {
             text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
             transform: right_score,
             ..default()
-        })
-        .insert(ScoreBoard)
-        .insert(RedText);
+        },
+        ScoreBoard,
+        RedText,
+    ));
 }
 
 fn score_board(
