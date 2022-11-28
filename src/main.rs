@@ -4,10 +4,12 @@ use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_kira_audio::prelude::*;
 use crate::menu::MainMenuPlugin;
+use crate::player::PlayerPlugin;
 
 pub mod menu;
 pub mod firing;
 pub mod scoring;
+pub mod player;
 
 // Components are the data associated with entities.
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
@@ -46,18 +48,11 @@ struct Ship {
     fire_delay_passed: bool,
 }
 
-#[derive(Component)]
-struct ScoreBoard;
 
 #[derive(Component)]
 struct ScoreEvent {
     loser: String,
 }
-
-#[derive(Component)]
-struct RedText;
-#[derive(Component)]
-struct YellowText;
 
 #[derive(Component)]
 struct YellowLaser;
@@ -75,12 +70,6 @@ pub const CLEAR: Color = Color::rgb(0.1, 0.1, 0.1);
 pub const RESOLUTION: f32 = 16.0 / 9.0;
 pub const MAX_LASERS: usize = 5;
 pub const LASER_SIZE: Vec2 = Vec2 { x: 55.0, y: 17.0 };
-pub const SHIP_SCALE: f32 = 0.1;
-// original image 500 × 413
-pub const SHIP_SIZE: Vec2 = Vec2 {
-    x: 500.0 * SHIP_SCALE,
-    y: 413.0 * SHIP_SCALE,
-};
 
 fn main() {
     let width = 900.0;
@@ -96,86 +85,20 @@ fn main() {
             ..default()
         }))
         .add_plugin(AudioPlugin)
- //       .add_plugin(WorldInspectorPlugin::new())
+        //.add_plugin(WorldInspectorPlugin::new())
         .add_plugin(MainMenuPlugin)
         .add_plugin(FiringPlugin)
         .add_plugin(ScoringPlugin)
+        .add_plugin(PlayerPlugin)
         .add_state(GameState::MainMenu)
         .insert_resource(ClearColor(CLEAR))
         .register_type::<Ship>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_resources)
-        .add_system_set(SystemSet::on_update(GameState::Gameplay).with_system(player_fire))
         .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_players)
-        .add_startup_system(spawn_scoreboard)
-        .add_system(keyboard_input_system)
+        .add_system_set(SystemSet::on_update(GameState::Gameplay).with_system(keyboard_input_system))
         .add_event::<GameOverEvent>()
         .add_event::<ScoreEvent>()
         .run();
-}
-
-fn player_fire(
-    mut commands: Commands,
-    keyboard: Res<Input<KeyCode>>,
-    red_lasers: Query<&RedLaser>,
-    yellow_lasers: Query<&YellowLaser>,
-    mut ships: Query<(&Transform, &mut Ship)>,
-    materials: Res<GameAssets>,
-    audio: Res<Audio>,
-) {
-    // if let GameState::GameOver = game.state { return; }
-
-    let ship_width = 500.0 * 0.1;
-    for (ship_transform, mut ship) in &mut ships {
-        let color = ship.color.to_owned();
-        if (color == "red" && keyboard.pressed(KeyCode::Space))
-            || (color == "yellow" && keyboard.pressed(KeyCode::Back))
-        {
-            let laser_count = if color == "red" {
-                red_lasers.iter().len()
-            } else {
-                yellow_lasers.iter().len()
-            };
-
-            if laser_count < MAX_LASERS {
-                if ship.fire_delay_passed {
-                    let x = if color == "red" {
-                        ship_transform.translation.x - ship_width
-                    } else {
-                        ship_transform.translation.x + ship_width
-                    };
-                    let y = ship_transform.translation.y;
-                    if color == "red" {
-                        commands.spawn((
-                            SpriteBundle {
-                                texture: materials.red_laser.clone(),
-                                transform: Transform {
-                                    translation: Vec3 { x, y, z: 1.0 },
-                                    ..default()
-                                },
-                                ..default()
-                            },
-                            RedLaser {},
-                        ));
-                    } else {
-                        commands.spawn((
-                            SpriteBundle {
-                                texture: materials.yellow_laser.clone(),
-                                transform: Transform {
-                                    translation: Vec3 { x, y, z: 1.0 },
-                                    ..default()
-                                },
-                                ..default()
-                            },
-                            YellowLaser {},
-                        ));
-                    }
-                    audio.play(materials.fire_sound.clone());
-                    ship.fire_delay_passed = false;
-                }
-            }
-        }
-    }
 }
 
 fn keyboard_input_system(
@@ -269,138 +192,8 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 }
 
-fn spawn_players(mut commands: Commands, materials: Res<GameAssets>) {
-    // let spaceship_size = (55, 40);
-    // original image 500 × 413
-
-    // red = pygame.Rect(x, y, width, height)
-    // red = pygame.Rect(700, 300, SPACESHIP_SIZE[0], SPACESHIP_SIZE[1])
-    // yellow = pygame.Rect(100, 300, SPACESHIP_SIZE[0], SPACESHIP_SIZE[1])
-
-    // pygame window WIDTH, HEIGHT = 900, 500
-
-    let red_transform = Transform {
-        rotation: Quat::from_rotation_z(-90.0 * core::f32::consts::PI / 180.0),
-        scale: Vec3 {
-            x: SHIP_SCALE,
-            y: SHIP_SCALE,
-            z: 1.0,
-        },
-        translation: Vec3 {
-            x: 250.0,
-            y: 0.0,
-            z: 1.0,
-        },
-    };
-
-    let ship_component = Ship {
-        color: "red".to_string(),
-        health: 10,
-        laser_timer: Timer::from_seconds(0.2, TimerMode::Repeating),
-        fire_delay_passed: true,
-    };
-
-    commands.spawn((
-        SpriteBundle {
-            texture: materials.red_space_ship.clone(),
-            transform: red_transform,
-            ..default()
-        },
-        ship_component,
-        Name::new("red ship"),
-    ));
-
-    let yellow_transform = Transform {
-        rotation: Quat::from_rotation_z(90.0 * core::f32::consts::PI / 180.0),
-        scale: Vec3 {
-            x: SHIP_SCALE,
-            y: SHIP_SCALE,
-            z: 1.0,
-        },
-        translation: Vec3 {
-            x: -250.0,
-            y: 0.0,
-            z: 1.0,
-        },
-    };
-    let ship_component = Ship {
-        color: "yellow".to_string(),
-        health: 10,
-        laser_timer: Timer::from_seconds(0.2, TimerMode::Repeating),
-        fire_delay_passed: true,
-    };
-
-    commands.spawn((
-        SpriteBundle {
-            texture: materials.yellow_space_ship.clone(),
-            transform: yellow_transform,
-            ..default()
-        },
-        ship_component,
-        Name::new("yellow ship"),
-    ));
-}
 
 fn spawn_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
-}
-
-fn spawn_scoreboard(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    windows: ResMut<Windows>,
-) {
-    let font = asset_server.load("fonts/SFNSMono.ttf");
-    let text_style = TextStyle {
-        font,
-        font_size: 90.0,
-        color: Color::WHITE,
-    };
-    let text_alignment = TextAlignment::CENTER;
-
-    let window = windows.primary();
-    let width = window.width();
-    let height = window.height();
-    let x_padding = 100.0;
-    let y_padding = x_padding * (height / width);
-    let y_location = height / 2.0 - y_padding;
-
-    let left_score = Transform {
-        translation: Vec3 {
-            x: -width / 2.0 + x_padding,
-            y: y_location,
-            z: 1.0,
-        },
-        ..default()
-    };
-
-    commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
-            transform: left_score,
-            ..default()
-        },
-        ScoreBoard,
-        YellowText,
-    ));
-
-    let right_score = Transform {
-        translation: Vec3 {
-            x: width / 2.0 - x_padding,
-            y: y_location,
-            z: 1.0,
-        },
-        ..default()
-    };
-
-    commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
-            transform: right_score,
-            ..default()
-        },
-        ScoreBoard,
-        RedText,
-    ));
 }
 

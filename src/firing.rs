@@ -4,7 +4,7 @@ use bevy_kira_audio::prelude::*;
 
 use crate::{
     GameAssets, GameOverEvent, GameState, RedLaser, ScoreEvent, Ship, YellowLaser, LASER_SIZE,
-    SHIP_SIZE,
+    player::SHIP_SIZE,
 };
 
 pub struct FiringPlugin;
@@ -105,7 +105,7 @@ fn laser_collisions(
             }
             if ship.health == 0 {
                 game_over_event.send(GameOverEvent {
-                    winner: "yellow".to_string(),
+                    winner: "Yellow".to_string(),
                 });
                 break;
             }
@@ -128,7 +128,7 @@ fn laser_collisions(
             }
             if ship.health == 0 {
                 game_over_event.send(GameOverEvent {
-                    winner: "red".to_string(),
+                    winner: "Red".to_string(),
                 });
                 break;
             }
