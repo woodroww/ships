@@ -1,14 +1,18 @@
+use crate::firing::FiringPlugin;
 use bevy::prelude::*;
-use bevy::sprite::collide_aabb::collide;
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_kira_audio::prelude::*;
+use crate::menu::MainMenuPlugin;
+
+pub mod menu;
+pub mod firing;
 
 // Components are the data associated with entities.
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
 //     Examples: position, velocity, health, color, name
 
 #[derive(Resource)]
-pub struct Materials {
+pub struct GameAssets {
     red_laser: Handle<Image>,
     red_space_ship: Handle<Image>,
     yellow_laser: Handle<Image>,
@@ -24,15 +28,10 @@ struct GameOverEvent {
     winner: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum GameState {
-    GameOver,
-    Playing,
-    //   Reset,
-}
-
-#[derive(Resource)]
-struct ShipGame {
-    state: GameState,
+    MainMenu,
+    Gameplay,
 }
 
 // reflect things for bevy_inspector_egui
@@ -87,7 +86,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
-                title: "Bevy Tower Defense".to_string(),
+                title: "SpaceShips".to_string(),
                 width,
                 height,
                 ..default()
@@ -96,20 +95,21 @@ fn main() {
         }))
         .add_plugin(AudioPlugin)
         .add_plugin(WorldInspectorPlugin::new())
-        .insert_resource(ShipGame {
-            state: GameState::Playing,
-        })
+        .add_plugin(MainMenuPlugin)
+        .add_plugin(FiringPlugin)
+        .add_state(GameState::MainMenu)
         .insert_resource(ClearColor(CLEAR))
         .register_type::<Ship>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_resources)
+        //.add_system_set(SystemSet::on_enter(GameState::Gameplay).with_system(spawn_basic_scene))
         .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_player)
+        .add_startup_system(spawn_players)
         .add_startup_system(spawn_scoreboard)
+ //       .add_system(laser_system)
+ //       .add_system(check_laser_time)
+ //       .add_system(check_for_collisions)
         .add_system(keyboard_input_system)
-        .add_system(laser_system)
         .add_system(player_fire)
-        .add_system(check_laser_time)
-        .add_system(check_for_collisions)
         .add_system(reset_player)
         .add_system(game_over)
         .add_system(score_board)
@@ -124,103 +124,6 @@ fn game_over(mut game_over_events: EventReader<GameOverEvent>) {
     }
 }
 
-fn check_for_collisions(
-    mut commands: Commands,
-    yellow_lasers: Query<(Entity, &Transform, &YellowLaser)>,
-    red_lasers: Query<(Entity, &Transform, &RedLaser)>,
-    mut ships: Query<(&Transform, &mut Ship)>,
-    mut game_over_event: EventWriter<GameOverEvent>,
-    mut score_event: EventWriter<ScoreEvent>,
-    audio: Res<Audio>,
-    materials: Res<Materials>,
-) {
-    for (ship_transform, mut ship) in &mut ships {
-        if ship.color == "red" {
-            for (laser_entity, laser_transform, _laser) in &yellow_lasers {
-                let collision = collide(
-                    laser_transform.translation,
-                    LASER_SIZE,
-                    ship_transform.translation,
-                    SHIP_SIZE,
-                );
-                if let Some(_collision) = collision {
-                    ship.health -= 1;
-                    commands.entity(laser_entity).despawn_recursive();
-                    score_event.send(ScoreEvent {
-                        loser: "red".to_string(),
-                    });
-                    audio.play(materials.hit_sound.clone());
-                }
-            }
-            if ship.health == 0 {
-                game_over_event.send(GameOverEvent {
-                    winner: "yellow".to_string(),
-                });
-                break;
-            }
-        } else {
-            for (laser_entity, laser_transform, _laser) in &red_lasers {
-                let collision = collide(
-                    laser_transform.translation,
-                    LASER_SIZE,
-                    ship_transform.translation,
-                    SHIP_SIZE,
-                );
-                if let Some(_collision) = collision {
-                    ship.health -= 1;
-                    commands.entity(laser_entity).despawn_recursive();
-                    score_event.send(ScoreEvent {
-                        loser: "yellow".to_string(),
-                    });
-                    audio.play(materials.hit_sound.clone());
-                }
-            }
-            if ship.health == 0 {
-                game_over_event.send(GameOverEvent {
-                    winner: "red".to_string(),
-                });
-                break;
-            }
-        }
-    }
-}
-
-fn laser_system(
-    windows: ResMut<Windows>,
-    mut commands: Commands,
-    mut red_lasers: Query<(Entity, &RedLaser, &mut Transform), Without<YellowLaser>>,
-    mut yellow_lasers: Query<(Entity, &YellowLaser, &mut Transform), Without<RedLaser>>,
-    time: Res<Time>,
-) {
-    //info!("lasers: {}", lasers.iter().map(|(laser, _, _)| laser).collect::<Vec<&Laser>>().len());
-
-    let window = windows.primary();
-    let width = window.width();
-    let laser_velocity = 600.0 * time.delta_seconds();
-
-    for (entity, _laser, mut transform) in &mut yellow_lasers {
-        transform.translation.x += laser_velocity;
-        if transform.translation.x > width / 2.0 {
-            commands.entity(entity).despawn_recursive();
-        }
-    }
-
-    for (entity, _laser, mut transform) in &mut red_lasers {
-        transform.translation.x -= laser_velocity;
-        if transform.translation.x < -width / 2.0 {
-            commands.entity(entity).despawn_recursive();
-        }
-    }
-}
-
-fn check_laser_time(mut ships: Query<(&Transform, &mut Ship)>, time: Res<Time>) {
-    for (_t, mut ship) in &mut ships {
-        ship.laser_timer.tick(time.delta());
-        if ship.laser_timer.just_finished() {
-            ship.fire_delay_passed = true;
-        }
-    }
-}
 
 fn player_fire(
     mut commands: Commands,
@@ -228,13 +131,11 @@ fn player_fire(
     red_lasers: Query<&RedLaser>,
     yellow_lasers: Query<&YellowLaser>,
     mut ships: Query<(&Transform, &mut Ship)>,
-    game: Res<ShipGame>,
-    materials: Res<Materials>,
+    materials: Res<GameAssets>,
     audio: Res<Audio>,
 ) {
-    if let GameState::GameOver = game.state {
-        return;
-    }
+    // if let GameState::GameOver = game.state { return; }
+
     let ship_width = 500.0 * 0.1;
     for (ship_transform, mut ship) in &mut ships {
         let color = ship.color.to_owned();
@@ -397,7 +298,7 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
     let fire_sound = asset_server.load("Gun+Silencer.mp3");
     let hit_sound = asset_server.load("Grenade+1.mp3");
 
-    commands.insert_resource(Materials {
+    commands.insert_resource(GameAssets {
         red_laser: asset_server.load("red_laser.png"),
         red_space_ship: asset_server.load("spaceship_red.png"),
         yellow_laser: asset_server.load("yellow_laser.png"),
@@ -410,7 +311,7 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 }
 
-fn spawn_player(mut commands: Commands, materials: Res<Materials>) {
+fn spawn_players(mut commands: Commands, materials: Res<GameAssets>) {
     // let spaceship_size = (55, 40);
     // original image 500 × 413
 
@@ -550,7 +451,7 @@ fn score_board(
     mut score_events: EventReader<ScoreEvent>,
     mut red_text: Query<&mut Text, (With<RedText>, Without<YellowText>)>,
     mut yellow_text: Query<&mut Text, (With<YellowText>, Without<RedText>)>,
-    materials: Res<Materials>,
+    materials: Res<GameAssets>,
 ) {
     let text_style = TextStyle {
         font: materials.font.clone(),
