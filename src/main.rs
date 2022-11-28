@@ -1,4 +1,5 @@
 use crate::firing::FiringPlugin;
+use crate::scoring::ScoringPlugin;
 use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_kira_audio::prelude::*;
@@ -6,6 +7,7 @@ use crate::menu::MainMenuPlugin;
 
 pub mod menu;
 pub mod firing;
+pub mod scoring;
 
 // Components are the data associated with entities.
 // Component: just a normal Rust data type. generally scoped to a single piece of functionality
@@ -94,36 +96,23 @@ fn main() {
             ..default()
         }))
         .add_plugin(AudioPlugin)
-        .add_plugin(WorldInspectorPlugin::new())
+ //       .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(MainMenuPlugin)
         .add_plugin(FiringPlugin)
+        .add_plugin(ScoringPlugin)
         .add_state(GameState::MainMenu)
         .insert_resource(ClearColor(CLEAR))
         .register_type::<Ship>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_resources)
-        //.add_system_set(SystemSet::on_enter(GameState::Gameplay).with_system(spawn_basic_scene))
+        .add_system_set(SystemSet::on_update(GameState::Gameplay).with_system(player_fire))
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_players)
         .add_startup_system(spawn_scoreboard)
- //       .add_system(laser_system)
- //       .add_system(check_laser_time)
- //       .add_system(check_for_collisions)
         .add_system(keyboard_input_system)
-        .add_system(player_fire)
-        .add_system(reset_player)
-        .add_system(game_over)
-        .add_system(score_board)
         .add_event::<GameOverEvent>()
         .add_event::<ScoreEvent>()
         .run();
 }
-
-fn game_over(mut game_over_events: EventReader<GameOverEvent>) {
-    for event in game_over_events.iter() {
-        info!("Game Over! {} wins!", event.winner);
-    }
-}
-
 
 fn player_fire(
     mut commands: Commands,
@@ -260,37 +249,6 @@ fn keyboard_input_system(
                 transform.translation.x -= velocity;
             }
         }
-    }
-}
-
-fn reset_player(
-    mut ships: Query<(&mut Transform, &mut Ship)>,
-    mut game_over: EventReader<GameOverEvent>,
-    mut score_event: EventWriter<ScoreEvent>,
-) {
-    let event = game_over.iter().nth(0);
-    if event.is_some() {
-        for (mut ship_transform, mut ship) in &mut ships {
-            if ship.color == "red" {
-                ship_transform.translation = Vec3 {
-                    x: 250.0,
-                    y: 0.0,
-                    z: 1.0,
-                };
-            } else {
-                ship_transform.translation = Vec3 {
-                    x: -250.0,
-                    y: 0.0,
-                    z: 1.0,
-                };
-            }
-            ship.health = 10;
-        }
-        // this "red" shouldn't matter as we are not actually updating the health
-        // we just want the score board updated
-        score_event.send(ScoreEvent {
-            loser: "red".to_string(),
-        });
     }
 }
 
@@ -446,32 +404,3 @@ fn spawn_scoreboard(
     ));
 }
 
-fn score_board(
-    ships: Query<&Ship>,
-    mut score_events: EventReader<ScoreEvent>,
-    mut red_text: Query<&mut Text, (With<RedText>, Without<YellowText>)>,
-    mut yellow_text: Query<&mut Text, (With<YellowText>, Without<RedText>)>,
-    materials: Res<GameAssets>,
-) {
-    let text_style = TextStyle {
-        font: materials.font.clone(),
-        font_size: materials.font_size,
-        color: materials.color,
-    };
-    let text_alignment = TextAlignment::CENTER;
-    for event in score_events.iter() {
-        for ship in ships.iter() {
-            if event.loser == "red" && ship.color == "red" {
-                if let Ok(mut text) = red_text.get_single_mut() {
-                    *text = Text::from_section(ship.health.to_string(), text_style.clone())
-                        .with_alignment(text_alignment);
-                }
-            } else {
-                if let Ok(mut text) = yellow_text.get_single_mut() {
-                    *text = Text::from_section(ship.health.to_string(), text_style.clone())
-                        .with_alignment(text_alignment);
-                }
-            }
-        }
-    }
-}

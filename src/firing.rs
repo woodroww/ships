@@ -1,4 +1,3 @@
-pub struct FiringPlugin;
 use bevy::prelude::*;
 use bevy::sprite::collide_aabb::collide;
 use bevy_kira_audio::prelude::*;
@@ -8,21 +7,38 @@ use crate::{
     SHIP_SIZE,
 };
 
+pub struct FiringPlugin;
+
 impl Plugin for FiringPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system_set(SystemSet::on_enter(GameState::Gameplay).with_system(spawn_something))
+        app
+            .add_system_set(
+                SystemSet::on_exit(GameState::Gameplay)
+                    .with_system(reset_lasers)
+            )
             .add_system_set(
                 SystemSet::on_update(GameState::Gameplay)
-                    .with_system(laser_system)
-                    .with_system(check_laser_time)
-                    .with_system(check_for_collisions),
+                    .with_system(laser_movement)
+                    .with_system(check_laser_delay)
+                    .with_system(laser_collisions)
             );
     }
 }
 
-fn spawn_something() {}
+fn reset_lasers(
+    mut commands: Commands,
+    mut red_lasers: Query<(Entity, &RedLaser, &mut Transform), Without<YellowLaser>>,
+    mut yellow_lasers: Query<(Entity, &YellowLaser, &mut Transform), Without<RedLaser>>)
+{
+    for (entity, _laser, _transform) in &mut yellow_lasers {
+        commands.entity(entity).despawn_recursive();
+    }
+    for (entity, _laser, _transform) in &mut red_lasers {
+        commands.entity(entity).despawn_recursive();
+    }
+}
 
-fn laser_system(
+fn laser_movement(
     windows: ResMut<Windows>,
     mut commands: Commands,
     mut red_lasers: Query<(Entity, &RedLaser, &mut Transform), Without<YellowLaser>>,
@@ -50,7 +66,7 @@ fn laser_system(
     }
 }
 
-fn check_laser_time(mut ships: Query<(&Transform, &mut Ship)>, time: Res<Time>) {
+fn check_laser_delay(mut ships: Query<(&Transform, &mut Ship)>, time: Res<Time>) {
     for (_t, mut ship) in &mut ships {
         ship.laser_timer.tick(time.delta());
         if ship.laser_timer.just_finished() {
@@ -59,7 +75,7 @@ fn check_laser_time(mut ships: Query<(&Transform, &mut Ship)>, time: Res<Time>) 
     }
 }
 
-fn check_for_collisions(
+fn laser_collisions(
     mut commands: Commands,
     yellow_lasers: Query<(Entity, &Transform, &YellowLaser)>,
     red_lasers: Query<(Entity, &Transform, &RedLaser)>,
