@@ -17,7 +17,7 @@ pub struct ScoringPlugin;
 
 impl Plugin for ScoringPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(new_spawn_scoreboard)
+        app.add_startup_system(spawn_scoreboard)
             .add_system_set(SystemSet::on_enter(GameState::Gameplay).with_system(reset_player))
             .add_system_set(
                 SystemSet::on_update(GameState::Gameplay)
@@ -137,66 +137,6 @@ fn score_board(
 fn spawn_scoreboard(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    windows: ResMut<Windows>,
-) {
-    let font = asset_server.load("fonts/SFNSMono.ttf");
-    let text_style = TextStyle {
-        font,
-        font_size: 90.0,
-        color: Color::WHITE,
-    };
-    let text_alignment = TextAlignment::CENTER;
-
-    let window = windows.primary();
-    let width = window.width();
-    let height = window.height();
-    let x_padding = 100.0;
-    let y_padding = x_padding * (height / width);
-    let y_location = height / 2.0 - y_padding;
-
-    let left_score = Transform {
-        translation: Vec3 {
-            x: -width / 2.0 + x_padding,
-            y: y_location,
-            z: 1.0,
-        },
-        ..default()
-    };
-
-    commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
-            transform: left_score,
-            ..default()
-        },
-        ScoreBoard,
-        YellowText,
-    ));
-
-    let right_score = Transform {
-        translation: Vec3 {
-            x: width / 2.0 - x_padding,
-            y: y_location,
-            z: 1.0,
-        },
-        ..default()
-    };
-
-    commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("10", text_style.clone()).with_alignment(text_alignment),
-            transform: right_score,
-            ..default()
-        },
-        ScoreBoard,
-        RedText,
-    ));
-}
-
-fn new_spawn_scoreboard(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    windows: ResMut<Windows>,
 ) {
     let font = asset_server.load("fonts/SFNSMono.ttf");
     let text_style = TextStyle {
@@ -229,6 +169,7 @@ fn new_spawn_scoreboard(
 
     commands
         .spawn(vertical)
+        .insert(Name::new("Scoreboard"))
         .with_children(|commands| {
             commands.spawn(horizontal)
                 .with_children(|commands| {

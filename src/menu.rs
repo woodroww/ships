@@ -50,11 +50,11 @@ fn quit_button_clicked(
 }
 
 fn spawn_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let start_button = spawn_button(&mut commands, &asset_server, "Start Game", Color::RED);
-    commands.entity(start_button).insert(StartButton);
+    let start_button = spawn_button(&mut commands, &asset_server, "Start Game", Color::rgb(133.0, 0.0, 0.0));
+    commands.entity(start_button).insert(StartButton).insert(Name::new("StartButton"));
 
-    let quit_button = spawn_button(&mut commands, &asset_server, "Quit", Color::BLUE);
-    commands.entity(quit_button).insert(QuitButton);
+    let quit_button = spawn_button(&mut commands, &asset_server, "Quit", Color::rgb(0.0, 0.0, 187.0));
+    commands.entity(quit_button).insert(QuitButton).insert(Name::new("QuitButton"));
 
     commands
         .spawn(NodeBundle {
@@ -67,6 +67,7 @@ fn spawn_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         })
         .insert(MenuUIRoot)
+        .insert(Name::new("Menu"))
         .with_children(|commands| {
             commands.spawn(TextBundle {
                 style: Style {
@@ -83,7 +84,8 @@ fn spawn_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
                     },
                 ),
                 ..default()
-            });
+            })
+            .insert(Name::new("GameTitle"));
         })
         .add_child(start_button)
         .add_child(quit_button);
@@ -102,6 +104,8 @@ fn spawn_button(
                 align_self: AlignSelf::Center,
                 justify_content: JustifyContent::Center,
                 margin: UiRect::all(Val::Percent(2.0)),
+                min_size: Size::new(Val::Px(270.0), Val::Px(75.5)),
+                max_size: Size::new(Val::Px(270.0), Val::Px(75.5)),
                 ..default()
             },
             background_color: color.into(),
@@ -115,7 +119,7 @@ fn spawn_button(
                     ..default()
                 },
                 text: Text::from_section(
-                    text,
+                    text.to_string(),
                     TextStyle {
                         font: asset_server.load("fonts/SFNSMono.ttf"),
                         font_size: 44.0,

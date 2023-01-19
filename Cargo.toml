@@ -3,7 +3,27 @@ name = "ships"
 version = "0.1.0"
 edition = "2021"
 
-# Ships Game
+[profile.wasm-release]
+inherits = "release"
+
+# opt-level
+# The valid options are:
+# 
+# 0: no optimizations
+# 1: basic optimizations
+# 2: some optimizations
+# 3: all optimizations
+# "s": optimize for binary size
+# "z": optimize for binary size, but also turn off loop vectorization.
+
+# plain release 20 MB
+# opt-level "z" 18.1 MB
+# opt-level "s" 18.1 MB
+opt-level = "z" 
+# lto 11.7 MB
+lto = "fat"
+# codegen-units 10.4 MB
+codegen-units = 1
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -16,7 +36,6 @@ bevy_kira_audio = { version = "0.13.0", features = ["mp3"] }
 version = "0.9"
 default-features = false
 features = [
-	#"bevy_asset", "bevy_winit", "render", "png", "x11"] }
   "animation",
   "bevy_asset",
   #"bevy_audio",
