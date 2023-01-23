@@ -1,4 +1,4 @@
-use crate::GameState;
+use crate::{GameState, GameAssets};
 use bevy::{app::AppExit, prelude::*};
 
 #[derive(Component)]
@@ -49,11 +49,11 @@ fn quit_button_clicked(
     }
 }
 
-fn spawn_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let start_button = spawn_button(&mut commands, &asset_server, "Start Game", Color::rgb(133.0, 0.0, 0.0));
+fn spawn_main_menu(mut commands: Commands, my_assets: Res<GameAssets>) {
+    let start_button = spawn_button(&mut commands, &my_assets, "Start", my_assets.ufo_green.clone());
     commands.entity(start_button).insert(StartButton).insert(Name::new("StartButton"));
 
-    let quit_button = spawn_button(&mut commands, &asset_server, "Quit", Color::rgb(0.0, 0.0, 187.0));
+    let quit_button = spawn_button(&mut commands, &my_assets, "Quit", my_assets.ufo_red.clone());
     commands.entity(quit_button).insert(QuitButton).insert(Name::new("QuitButton"));
 
     commands
@@ -78,9 +78,9 @@ fn spawn_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
                 text: Text::from_section(
                     "SpaceShips",
                     TextStyle {
-                        font: asset_server.load("fonts/SFNSMono.ttf"),
+                        font: my_assets.font.clone(),
                         font_size: 70.0,
-                        color: Color::WHITE,
+                        color: my_assets.color,
                     },
                 ),
                 ..default()
@@ -93,37 +93,39 @@ fn spawn_main_menu(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn spawn_button(
     commands: &mut Commands,
-    asset_server: &AssetServer,
+    my_assets: &Res<GameAssets>,
     text: &str,
-    color: Color,
+    img: Handle<Image>,
 ) -> Entity {
+    let mut button_margin = UiRect::all(Val::Percent(2.0));
+    button_margin.left = Val::Percent(-10.0);
+
     commands
         .spawn(ButtonBundle {
             style: Style {
-                size: Size::new(Val::Percent(30.0), Val::Percent(15.0)),
+                size: Size::new(Val::Px(91.0), Val::Px(91.0)),
                 align_self: AlignSelf::Center,
                 justify_content: JustifyContent::Center,
-                margin: UiRect::all(Val::Percent(2.0)),
-                min_size: Size::new(Val::Px(270.0), Val::Px(75.5)),
-                max_size: Size::new(Val::Px(270.0), Val::Px(75.5)),
+                margin: button_margin,
                 ..default()
             },
-            background_color: color.into(),
+            image: img.into(),
             ..default()
         })
         .with_children(|commands| {
             commands.spawn(TextBundle {
                 style: Style {
-                    align_self: AlignSelf::Center,
+                    align_self: AlignSelf::FlexStart,
                     margin: UiRect::all(Val::Percent(3.0)),
+                    position: UiRect::new(Val::Px(0.0), Val::Px(-110.0), Val::Px(20.0), Val::Px(0.0)),
                     ..default()
                 },
                 text: Text::from_section(
                     text.to_string(),
                     TextStyle {
-                        font: asset_server.load("fonts/SFNSMono.ttf"),
+                        font: my_assets.font.clone(),
                         font_size: 44.0,
-                        color: Color::WHITE,
+                        color: my_assets.color,
                     },
                 ),
                 ..default()

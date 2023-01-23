@@ -5,11 +5,11 @@ use crate::{
     MAX_LASERS,
 };
 
-pub const SHIP_SCALE: f32 = 0.1;
+pub const SHIP_SCALE: f32 = 0.5;
 // original image 500 × 413
 pub const SHIP_SIZE: Vec2 = Vec2 {
-    x: 500.0 * SHIP_SCALE,
-    y: 413.0 * SHIP_SCALE,
+    x: 98.0 * SHIP_SCALE,
+    y: 75.0 * SHIP_SCALE,
 };
 
 pub struct PlayerPlugin;
@@ -34,9 +34,6 @@ fn player_fire(
     materials: Res<GameAssets>,
     audio: Res<Audio>,
 ) {
-    // if let GameState::GameOver = game.state { return; }
-
-    let ship_width = 500.0 * 0.1;
     for (ship_transform, mut ship) in &mut ships {
         let color = ship.color.to_owned();
         if (color == "red" && keyboard.pressed(KeyCode::Space))
@@ -51,9 +48,9 @@ fn player_fire(
             if laser_count < MAX_LASERS {
                 if ship.fire_delay_passed {
                     let x = if color == "red" {
-                        ship_transform.translation.x - ship_width
+                        ship_transform.translation.x - SHIP_SIZE.x
                     } else {
-                        ship_transform.translation.x + ship_width
+                        ship_transform.translation.x + SHIP_SIZE.x
                     };
                     let y = ship_transform.translation.y;
                     if color == "red" {
@@ -90,17 +87,8 @@ fn player_fire(
 }
 
 fn spawn_players(mut commands: Commands, materials: Res<GameAssets>) {
-    // let spaceship_size = (55, 40);
-    // original image 500 × 413
-
-    // red = pygame.Rect(x, y, width, height)
-    // red = pygame.Rect(700, 300, SPACESHIP_SIZE[0], SPACESHIP_SIZE[1])
-    // yellow = pygame.Rect(100, 300, SPACESHIP_SIZE[0], SPACESHIP_SIZE[1])
-
-    // pygame window WIDTH, HEIGHT = 900, 500
-
     let red_transform = Transform {
-        rotation: Quat::from_rotation_z(-90.0 * core::f32::consts::PI / 180.0),
+        rotation: Quat::from_rotation_z(90.0 * core::f32::consts::PI / 180.0),
         scale: Vec3 {
             x: SHIP_SCALE,
             y: SHIP_SCALE,
@@ -131,7 +119,7 @@ fn spawn_players(mut commands: Commands, materials: Res<GameAssets>) {
     ));
 
     let yellow_transform = Transform {
-        rotation: Quat::from_rotation_z(90.0 * core::f32::consts::PI / 180.0),
+        rotation: Quat::from_rotation_z(-90.0 * core::f32::consts::PI / 180.0),
         scale: Vec3 {
             x: SHIP_SCALE,
             y: SHIP_SCALE,

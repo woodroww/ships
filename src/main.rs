@@ -1,7 +1,7 @@
 use crate::firing::FiringPlugin;
 use crate::scoring::ScoringPlugin;
 use bevy::prelude::*;
-use bevy_inspector_egui::WorldInspectorPlugin;
+//use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_kira_audio::prelude::*;
 use crate::menu::MainMenuPlugin;
 use crate::player::PlayerPlugin;
@@ -26,6 +26,8 @@ pub struct GameAssets {
     color: Color,
     fire_sound: Handle<AudioSource>,
     hit_sound: Handle<AudioSource>,
+    ufo_green: Handle<Image>,
+    ufo_red: Handle<Image>,
 }
 
 struct GameOverEvent {
@@ -184,11 +186,13 @@ fn load_resources(mut commands: Commands, asset_server: Res<AssetServer>) {
         red_space_ship: asset_server.load("spaceship_red.png"),
         yellow_laser: asset_server.load("yellow_laser.png"),
         yellow_space_ship: asset_server.load("spaceship_yellow.png"),
-        font: asset_server.load("fonts/SFNSMono.ttf"),
+        font: asset_server.load("fonts/Roboto-Regular.ttf"),
         font_size: 90.0,
-        color: Color::WHITE,
+        color: Color::SILVER,
         fire_sound,
         hit_sound,
+        ufo_green: asset_server.load("ufoGreen.png"),
+        ufo_red: asset_server.load("ufoRed.png"),
     });
 }
 

@@ -37,12 +37,12 @@ from root directory of project
 #### a) Using default release build
 ```
 cargo build --release --target wasm32-unknown-unknown
-wasm-bindgen --out-dir ./webapp/ --target web ./target/wasm32-unknown-unknown/release/ships.wasm
+wasm-bindgen --out-dir ./webapp/ --target web --no-typescript ./target/wasm32-unknown-unknown/release/ships.wasm
 ```
 #### b) Using optimizations from the Cargo.toml [profile.wasm-release]
 ```
 cargo build --profile wasm-release --target wasm32-unknown-unknown
-wasm-bindgen --out-dir ./webapp/ --target web ./target/wasm32-unknown-unknown/wasm-release/ships.wasm
+wasm-bindgen --out-dir ./webapp/ --target web --no-typescript ./target/wasm32-unknown-unknown/wasm-release/ships.wasm
 ```
 
 wasm-bindgen will place output files in `./webapp/`
@@ -51,10 +51,17 @@ wasm-bindgen will place output files in `./webapp/`
 in webapp directory:
 `ln -s ../assets/ assets`
 
-- for deployment copy the assets into webapp/assets and then to your server
+- for deployment copy the assets into webapp/assets on your server
 
 ### serve
-in webapp directory
+If simple-http-server is not installed:
+`cargo install simple-http-server`
+Then webapp directory:
 `basic-http-server .`
-or
-`python -m http.server --directory .`
+
+
+## Assets
+[Sounds](https://github.com/techwithtim/PygameForBeginners)
+[Lasers and ships](https://opengameart.org/content/space-shooter-redux)
+[Font](https://developers.google.com/fonts)
+
