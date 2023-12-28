@@ -14,10 +14,13 @@ rustup target install wasm32-unknown-unknown
 ```
 
 ### run on local webserver using the wasm-server-runner
+[wasm-server-runner](https://github.com/jakobhellermann/wasm-server-runner)
 `cargo run --target wasm32-unknown-unknown`
 
 ### build for deployment
 from root directory of project
+#### install wasm-bindgen-cli
+cargo install -f wasm-bindgen-cli
 
 #### a) Using default release build
 ```
@@ -42,7 +45,7 @@ for deployment copy the assets into webapp/assets on the server
 If simple-http-server is not installed:
 `cargo install simple-http-server`
 Then in webapp directory:
-`basic-http-server .`
+`simple-http-server .`
 
 ### More information
 [Bevy](https://github.com/bevyengine/bevy/tree/main/examples#wasm)
